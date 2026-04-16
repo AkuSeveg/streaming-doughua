@@ -9,11 +9,11 @@ const rateLimit = require('express-rate-limit');
 const NodeCache = require('node-cache');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 320 });
 
-app.use(helmet());
+app.use(helmet({
+    contentSecurityPolicy: false
+}));
 app.use(cors());
 app.use(compression());
 app.use(express.json());
@@ -23,7 +23,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 const limiter = rateLimit({
     windowMs: 15 * 60 * 1000, 
     max: 150, 
-    message: { success: false, message: "Terlalu banyak request, coba lagi nanti." }
+    message: { success: false, message: "Too many requests" }
 });
 app.use('/api/', limiter);
 
@@ -56,16 +56,14 @@ app.get('/api/home', async (req, res) => {
 app.get('/api/search', async (req, res) => {
     try {
         const { q, pages = '1' } = req.query;
-        if (!q) return res.status(400).json({ success: false, message: "Query kosong" });
+        if (!q) return res.status(400).json({ success: false, message: "Query required" });
 
         const cacheKey = `search_${q.toLowerCase()}_page_${pages}`;
         if (cache.has(cacheKey)) {
             return res.status(200).json(cache.get(cacheKey));
         }
 
-        const queryParams = new URLSearchParams({ q, pages });
-        const response = await orbitcloudAPI.get(`/api/v1/search?${queryParams.toString()}`);
-        
+        const response = await orbitcloudAPI.get(`/api/v1/search?q=${q}&pages=${pages}`);
         cache.set(cacheKey, response.data);
         res.status(200).json(response.data);
     } catch (error) {
@@ -103,6 +101,4 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => {
-    console.log(`Server Web Streaming berjalan di port ${PORT}`);
-});
+module.exports = app;
